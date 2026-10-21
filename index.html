@@ -22,7 +22,7 @@
   :focus-visible{outline:3px dashed var(--green);outline-offset:3px}
 
   /* прогресс */
-  .top{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 0 8px;border-bottom:3px solid var(--ink);margin-bottom:16px}
+  .top{padding:0 0 8px;border-bottom:3px solid var(--ink);margin-bottom:16px}
   .pbar{display:flex;gap:3px}
   .pbar i{flex:1;height:12px;border:2px solid var(--ink);background:#fff}
   .pbar i.done{background:var(--green)}
@@ -78,7 +78,13 @@
   .zone[data-bin="want"]{border-style:solid;border-color:#c99a0e}
   .zone[data-bin="not_needed"]{border-style:solid;border-color:#7d877f}
   .bins{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-  .card{border:2px solid var(--ink);background:#fff;padding:8px;margin:0 0 8px;box-shadow:2px 2px 0 var(--ink);cursor:grab;font-size:14px}
+  .card{border:2px solid var(--ink);background:#fff;padding:8px;margin:0 0 8px;box-shadow:2px 2px 0 var(--ink);cursor:grab;font-size:14px;transition:background .15s}
+  .card[data-st="doing"]{background:#d9f2df}
+  .card[data-st="want"]{background:#fcf0c4}
+  .card[data-st="not_needed"]{background:#eceeec}
+  .cards{margin:0 0 14px}
+  .zone-item{font-size:13px;border-top:1px dashed #cfd5d1;padding:4px 0}
+  .zone-list:empty::after{content:"—";color:var(--muted);font-size:13px}
   .card-b{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
   .mini{flex:1;font-size:12px;border:2px solid var(--ink);background:#fff;padding:5px 4px;cursor:pointer;min-height:34px;color:var(--ink)}
   .mini[aria-pressed="true"].bin-doing{background:var(--green)}
@@ -154,7 +160,6 @@
   .devbar b{background:var(--ink);color:#fff3c4;padding:1px 6px}
   .devbar button,.devbar select{font:inherit;font-size:13px;border:2px solid var(--ink);background:#fff;padding:4px 8px;cursor:pointer;color:var(--ink)}
   .devbar button.on{background:#f2c230}
-  body.dev .top{top:44px}
   body.dev-edit [data-k]{outline:2px dashed #c99a0e;outline-offset:1px;cursor:text}
   body.dev [data-k].edited{background:#fff3c4 !important;box-shadow:inset 0 -3px 0 #c99a0e}
   body.dev [data-k].noted{box-shadow:inset 0 -3px 0 #e5484d}
@@ -174,11 +179,11 @@
 <body>
 <div id="devroot"></div>
 <div class="wrap">
-  <div class="top" id="top"></div>
   <div class="monitor" aria-hidden="true">
     <div class="tbar"><span id="tbarname">C:\MSOPS\START.EXE</span><span>_ □ ×</span></div>
     <canvas id="scene" width="160" height="80"></canvas>
   </div>
+  <div class="top" id="top"></div>
   <main id="app"></main>
 </div>
 <nav class="nav" id="nav" aria-label="Навигация"></nav>
@@ -193,7 +198,7 @@
 /*CONFIG-START*/
 const CONFIG = {
   // Адрес приёмника ответов (Google Apps Script, Web app /exec). Пусто — ответы никуда не уходят.
-  ENDPOINT: '',
+  ENDPOINT: 'https://script.google.com/macros/s/AKfycbzwzrKdoMKhx1-K_VfEKIpfP0DQL5aKHhxPwgGeruGRtmQkW3fEqkF6x7spLwM8nstzLw/exec',
   SURVEY_ID: 'msops-2026-10',
 };
 
@@ -701,7 +706,7 @@ R.q2 = ()=>{
   const A = S.A; A.q2 = A.q2 || {}; A.q2_custom = A.q2_custom || [];
   const cards = allCards();
   const card = c => {
-    const el = h('div',{class:'card', draggable:'true'},
+    const el = h('div',{class:'card', draggable:'true', 'data-st':A.q2[c.id]||''},
       c.key ? tx('div',c.key) : h('div',{},c.label),
       h('div',{class:'card-b'}, BINS.map(b=> h('button',{type:'button', class:'mini bin-'+b.id, fid:'q2_'+c.id+'_'+b.id,
         'aria-pressed':String(A.q2[c.id]===b.id), 'aria-label':cardLabel(c)+': '+T('BINS.'+b.id),
@@ -709,11 +714,12 @@ R.q2 = ()=>{
     el.addEventListener('dragstart', e=>{ e.dataTransfer.setData('text/plain', c.id); e.dataTransfer.effectAllowed='move'; });
     return el;
   };
+  // карточки не прыгают: стоят на месте и красятся, корзины ниже — сводка и цель для перетаскивания
   const zone = bin => {
     const list = cards.filter(c=> (A.q2[c.id]||'')===bin);
-    const z = h('div',{class:'zone','data-bin':bin||'pool'},
-      h('div',{class:'zone-h'}, bin ? tx('span','BINS.'+bin) : tx('span','STRINGS.q2_pool'), h('span',{}, String(list.length))),
-      list.map(card));
+    const z = h('div',{class:'zone','data-bin':bin},
+      h('div',{class:'zone-h'}, tx('span','BINS.'+bin), h('span',{}, String(list.length))),
+      h('div',{class:'zone-list'}, list.map(c=> h('div',{class:'zone-item'}, cardLabel(c)))));
     z.addEventListener('dragover', e=>{ e.preventDefault(); z.classList.add('over'); });
     z.addEventListener('dragleave', ()=> z.classList.remove('over'));
     z.addEventListener('drop', e=>{ e.preventDefault(); const id=e.dataTransfer.getData('text/plain'); if(id){ A.q2[id]=bin; changed(); } });
@@ -725,7 +731,7 @@ R.q2 = ()=>{
     const id = 'custom_' + (A.q2_custom.length+1); A.q2_custom.push({id, label:v}); A.q2[id]=''; changed();
     const el = document.getElementById('f_q2add'); if(el) el.focus(); };
   return h('section',{}, head('q2'), tx('p','STRINGS.q2_hint',{class:'hint'}),
-    zone(''),
+    h('div',{class:'cards'}, cards.map(card)),
     h('div',{class:'bins'}, BINS.map(b=>zone(b.id))),
     h('div',{class:'field'}, h('label',{class:'flabel',for:'f_q2add',k:'STRINGS.q2_add_label'}, T('STRINGS.q2_add_label')),
       h('div',{class:'addrow'}, addInp, h('button',{class:'btn',type:'button',onclick:add}, tx('span','STRINGS.q2_add_btn')))));
