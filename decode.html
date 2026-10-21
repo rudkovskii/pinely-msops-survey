@@ -43,7 +43,7 @@
     <div class="row"><b>Или вручную:</b> <span class="muted">вставьте содержимое колонки raw_json, по одной строке JSON на строку</span></div>
     <textarea id="raw"></textarea>
     <div class="row"><button class="ghost" id="parse">Разобрать вставленное</button>
-      <label><input type="checkbox" id="hideDev" checked> скрыть тестовые (dev)</label>
+      <label><input type="checkbox" id="hideDev" checked> скрыть тестовые (dev и ТЕСТ)</label>
       <label><input type="checkbox" id="onlyDone"> только завершённые</label>
       <button class="ghost" id="csv">Скачать CSV</button></div>
     <div id="err"></div>
@@ -94,7 +94,7 @@ function draw(){
   const fake = C.FEATURES.filter(f=>f.fake).map(f=>f.id);
   o.push(`<h2>Люди: ${N}</h2>`);
   o.push('<div class="scroll"><table><tr><th>Имя</th><th>Статус</th><th>Дошёл до</th><th>Частота</th><th>Автоматизация</th><th>overclaim</th><th>Блоки сессии по порядку</th></tr>' +
-    P.map(p=>`<tr><td>${esc(p.name||'—')}${p.dev?' <span class="tag">dev</span>':''}</td><td>${esc(p.status)}</td><td>${esc(p.last_screen)}</td>
+    P.map(p=>`<tr><td>${esc(p.name||'—')}${p.test?' <span class="tag" style="background:#f8c9cb" title="'+esc(p.test_note||'')+'">ТЕСТ</span>':(p.dev?' <span class="tag">dev</span>':'')}</td><td>${esc(p.status)}</td><td>${esc(p.last_screen)}</td>
       <td>${esc(L(C.OPTIONS.q1,p.q1))}</td><td>${esc(L(C.OPTIONS.q6,p.q6))}</td>
       <td>${p.overclaim?'<b style="color:#e5484d">да</b>':''}</td>
       <td>${esc((p.q8||[]).map(b=>L(C.SESSION_BLOCKS,b).split(':')[0]).join(' > '))}</td></tr>`).join('') + '</table></div>');
