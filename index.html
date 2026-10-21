@@ -672,7 +672,7 @@ R.final = ()=> h('section',{},
    ====================================================================== */
 const cv = document.getElementById('scene'), X = cv.getContext('2d');
 const W = 160, H = 80;
-const PAL = {h:'#151515', s:'#e9b48e', o:'#000000', c:'#1e2120', C:'#3d4440', w:'#e8ece9', p:'#2a2d2c', k:'#060606',
+const PAL = {h:'#151515', s:'#e9b48e', o:'#000000', O:'#7dffa0', c:'#1e2120', C:'#3d4440', w:'#e8ece9', p:'#2a2d2c', k:'#060606',
   a:'#d97757', A:'#f0a585', L:'#fff1e6', y:'#f2c230', g:'#34A948', G:'#62C584', W:'#f4f4ef', x:'#9aa39d'};
 function R_(x,y,w,h,c){ X.fillStyle=c; X.fillRect(Math.round(x),Math.round(y),w,h); }
 function hash(n){ const s=Math.sin(n*127.1+311.7)*43758.5453; return s-Math.floor(s); }
@@ -684,9 +684,9 @@ function SP(rows,x,y,o){ o=o||{}; const s=o.s||1, pal=o.pal?Object.assign({},PAL
 const NEO = [
   "...hhhh...",
   "..hhhhhh..",
-  "..hssssh..",
-  "..oooooo..",
-  "..ssssss..",
+  "..hhsshh..",
+  "..oOooOo..",
+  "..oossoo..",
   "...ssss...",
   "....ss....",
   ".cccwwccc.",
