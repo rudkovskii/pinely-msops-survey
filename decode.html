@@ -111,7 +111,7 @@ function draw(){
     C.FEATURES.map(f=>`<tr><td>${esc(f.label)}${f.fake?' <span class="tag">ловушка</span>':''}</td>` + C.FEATURE_LEVELS.map(l=>`<td>${P.filter(p=>(p.q3||{})[f.id]===l.id).length||''}</td>`).join('') + '</tr>').join('') +
     `</table><p>Флаг overclaim: ${P.filter(p=>p.overclaim).map(p=>esc(p.name||'—')).join(', ') || 'нет'}</p>`);
 
-  o.push('<h2>Q4 · Куда Claude пойдёт искать ответ</h2>' + `<p>Не знаю: ${P.filter(p=>p.q4_unknown).length}</p>` +
+  o.push('<h2>Q4 · Куда ИИ пойдёт искать ответ</h2>' + `<p>Не знаю: ${P.filter(p=>p.q4_unknown).length}</p>` +
     (P.filter(p=>p.q4).map(p=>`<div class="quote"><b>${esc(p.name||'—')}</b><br>${esc(p.q4)}</div>`).join('') || '<p class="muted">нет ответов</p>'));
 
   const ref = C.TRAFFIC_REFERENCE||{}, hasRef = Object.keys(ref).length>0, cls={green:'g',yellow:'y',red:'r',unknown:'u'};
@@ -141,16 +141,20 @@ $('csv').onclick = ()=>{
   const P = rows();
   const cols = ['name','status','last_screen','q1','q2','q2_other', ...C.FEATURES.map(f=>'q3:'+f.id), 'overclaim','q4','q4_unknown',
     ...C.TRAFFIC_CARDS.map(t=>'q5:'+t.id), 'q6','q6_want','q7','q7_other','q8','q8_awkward','ts','sid'];
+  // коды ответов → русские подписи из конфига анкеты
+  const LISTS = {q1:C.OPTIONS.q1, q2:C.OPTIONS.q2, q6:C.OPTIONS.q6, q6_want:C.AUTOMATION_TOPICS, q7:C.EXAMPLES, q8:C.SESSION_BLOCKS};
   const val = (p,c)=>{
-    if(c.startsWith('q3:')) return (p.q3||{})[c.slice(3)]||'';
-    if(c.startsWith('q5:')) return (p.q5||{})[c.slice(3)]||'';
+    if(c.startsWith('q3:')){ const v=(p.q3||{})[c.slice(3)]; return v ? L(C.FEATURE_LEVELS,v) : ''; }
+    if(c.startsWith('q5:')){ const v=(p.q5||{})[c.slice(3)]; return v ? L(C.TRAFFIC_COLORS,v) : ''; }
     const v = p[c];
-    if(Array.isArray(v)) return v.join(c==='q8' ? ' > ' : ', ');
-    if(typeof v==='boolean') return v ? 'TRUE' : '';
+    if(Array.isArray(v)) return v.map(x=> LISTS[c] ? L(LISTS[c],x) : x).join(c==='q8' ? ' > ' : '; ');
+    if(typeof v==='boolean') return v ? 'да' : '';
+    if(LISTS[c] && v) return L(LISTS[c],v);
     return v==null ? '' : v;
   };
+  const head = c => c.startsWith('q3:') ? 'q3: '+L(C.FEATURES,c.slice(3)) : c.startsWith('q5:') ? 'q5: '+L(C.TRAFFIC_CARDS,c.slice(3)) : c;
   const q = s => { s=String(s); if(/^[=+\-@]/.test(s)) s="'"+s; return '"'+s.replace(/"/g,'""')+'"'; };
-  const csv = '﻿' + [cols.join(','), ...P.map(p=>cols.map(c=>q(val(p,c))).join(','))].join('\n');
+  const csv = '﻿' + [cols.map(c=>q(head(c))).join(','), ...P.map(p=>cols.map(c=>q(val(p,c))).join(','))].join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download = 'msops-answers.csv'; a.click();
 };
 </script>
