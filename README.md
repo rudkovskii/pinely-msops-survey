@@ -29,9 +29,9 @@ authored_by: ai
 
 ## Что править в конфиге
 
-Всё лежит между `/*CONFIG-START*/` и `/*CONFIG-END*/` в `index.html`: `STRINGS`, `FUN_NAMES`, `OPTIONS`, `FEATURES`, `CONTEXT_ITEMS`, `CONTEXT_REFERENCE`, `TRAFFIC_CARDS`, `TRAFFIC_REFERENCE`, `AUTOMATION_TOPICS`, `EXAMPLES`, `SESSION_BLOCKS`. Значения `id` не менять: по ним ответы лежат в таблице.
+Всё лежит между `/*CONFIG-START*/` и `/*CONFIG-END*/` в `index.html`: `STRINGS`, `FUN_NAMES`, `OPTIONS`, `FEATURES`, `TRAFFIC_CARDS`, `TRAFFIC_REFERENCE`, `AUTOMATION_TOPICS`, `EXAMPLES`, `SESSION_BLOCKS`. Значения `id` не менять: по ним ответы лежат в таблице.
 
-Эталоны: `TRAFFIC_REFERENCE = {director_passport:'red', …}`, `CONTEXT_REFERENCE = ['project_instructions', …]`. Декодер подсвечивает расхождения.
+Эталон светофора: `TRAFFIC_REFERENCE = {director_passport:'red', …}`. Декодер подсвечивает расхождения.
 
 ## Декодер
 

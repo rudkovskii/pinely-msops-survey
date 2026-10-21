@@ -85,14 +85,6 @@
   .seg3{grid-template-columns:repeat(3,1fr)}
   .seg3 button[aria-pressed="true"]{background:var(--green)}
 
-  /* схема «что видит Claude» */
-  .ctx svg{width:100%;height:auto;display:block;margin:0 0 12px;border:3px solid var(--ink);background:#fff}
-  .ctx .node{cursor:pointer}
-  .ctx .node rect{fill:#fff;stroke:#0b0b0b;stroke-width:3}
-  .ctx .node.on rect{fill:#34A948}
-  .ctx .node:focus{outline:none}
-  .ctx .node:focus-visible rect{stroke:#34A948;stroke-dasharray:4 3}
-  .ctx .num{font:700 15px var(--mono);fill:#0b0b0b}
 
   /* сетка функций */
   .feat{border:3px solid var(--ink);background:#fff;padding:10px 12px;margin:0 0 10px}
@@ -205,10 +197,9 @@ const STRINGS = {
   q3_title: 'Что из этого вам знакомо?',
   q3_hint: 'Для каждой строки выберите один вариант.',
 
-  q4_title: 'Что видит Claude?',
-  q4_hint: 'Вы задаёте вопрос в проекте Claude. Отметьте на схеме или в списке всё, что Claude видит в этот момент.',
-  q4_center: 'Вы задаёте вопрос',
-  q4_center2: 'в проекте Claude',
+  q4_title: 'Куда Claude пойдёт искать ответ?',
+  q4_scene: 'Вы открыли свой проект в Claude и задаёте ему вопрос по внутренней политике компании.',
+  q4_label: 'Расскажите своими словами, как вы это себе представляете. Правильного ответа нет.',
   q4_unknown: 'Не знаю',
 
   q5_title: 'Светофор: что вы загрузили бы в Claude?',
@@ -292,20 +283,6 @@ const FEATURES = [
   {id:'hyperlink_sync', label:'Claude Hyperlink Sync', fake:true},
 ];
 
-// Q4 «Что видит Claude»
-const CONTEXT_ITEMS = [
-  {id:'project_instructions', label:'Инструкции проекта'},
-  {id:'project_file_1',       label:'Файл 1 в проекте'},
-  {id:'project_file_2',       label:'Файл 2 в проекте'},
-  {id:'other_chat',           label:'Соседний чат вне проекта'},
-  {id:'yesterday_chat',       label:'Вчерашний чат в этом же проекте'},
-  {id:'gdrive',               label:'Папка в Google Drive (подключён)'},
-  {id:'slack',                label:'Slack (подключён)'},
-  {id:'desktop',              label:'Ваш рабочий стол на компьютере'},
-];
-// Эталон: список id, которые Claude видит. Пусто — декодер не сравнивает.
-const CONTEXT_REFERENCE = [];
-
 // Q5 «Светофор»
 const TRAFFIC_COLORS = [
   {id:'green',   label:'Спокойно загружу'},
@@ -356,13 +333,13 @@ const SHOW_TIPS = false;
 const TIPS = [];
 /*CONFIG-END*/
 
-const CFG = {CONFIG, STRINGS, FUN_NAMES, OPTIONS, FEATURE_LEVELS, FEATURES, CONTEXT_ITEMS, CONTEXT_REFERENCE,
+const CFG = {CONFIG, STRINGS, FUN_NAMES, OPTIONS, FEATURE_LEVELS, FEATURES,
   TRAFFIC_COLORS, TRAFFIC_CARDS, TRAFFIC_REFERENCE, AUTOMATION_TOPICS, EXAMPLES, SESSION_BLOCKS, SHOW_TIPS, TIPS};
 
 /* ====================================================================== */
 const DEV = new URLSearchParams(location.search).has('dev');
 const LS_DEV = 'msops_dev_v1';
-const SS_STATE = DEV ? 'msops_state_dev_v1' : 'msops_state_v1';
+const SS_STATE = DEV ? 'msops_state_dev_v2' : 'msops_state_v2';
 
 function store(kind){ try{ return kind==='l' ? window.localStorage : window.sessionStorage }catch(e){ return null } }
 function readJSON(kind,key,def){ try{ const v=store(kind)?.getItem(key); return v?JSON.parse(v):def }catch(e){ return def } }
@@ -433,7 +410,7 @@ function payload(status){
     q2:A.q2||[], q2_other:(A.q2||[]).includes('other') ? (A.q2_other||'') : '',
     q3,
     overclaim: fake.some(id=>q3[id]==='use'),
-    q4:A.q4_unknown ? ['unknown'] : (A.q4||[]),
+    q4:A.q4_unknown ? '' : (A.q4||''), q4_unknown:!!A.q4_unknown,
     q5:A.q5||{},
     q6:A.q6||'', q6_want:A.q6_want||[],
     q7:A.q7||[], q7_other:(A.q7||[]).includes('other') ? (A.q7_other||'') : '',
@@ -472,7 +449,7 @@ function changed(){ save(); renderBody(); }
 
 function answered(id){
   const A=S.A, v=A[id];
-  if(id==='q4') return !!(A.q4_unknown || (A.q4||[]).length);
+  if(id==='q4') return !!(A.q4_unknown || (A.q4||'').trim());
   if(id==='q6') return !!(A.q6 || (A.q6_want||[]).length);
   if(id==='q8') return !!((A.q8||[]).length || A.q8_awkward);
   if(v==null || v==='') return false;
@@ -588,34 +565,10 @@ R.q3 = ()=>{
 };
 
 R.q4 = ()=>{
-  const A=S.A; A.q4 = A.q4 || [];
-  const toggle = id => { A.q4_unknown = false; A.q4 = A.q4.includes(id) ? A.q4.filter(x=>x!==id) : [...A.q4, id]; changed(); };
-  const NS = 'http://www.w3.org/2000/svg';
-  const sv = (tag, at, ...kids)=>{ const e=document.createElementNS(NS,tag); for(const k in at) e.setAttribute(k,at[k]); kids.forEach(c=>e.append(c)); return e; };
-  const W=360, H=250, cx=180, cy=125;
-  const svg = sv('svg',{viewBox:`0 0 ${W} ${H}`, role:'group', 'aria-label':T('STRINGS.q4_center')+' '+T('STRINGS.q4_center2')});
-  CONTEXT_ITEMS.forEach((it,i)=>{
-    const a = -Math.PI/2 + i*Math.PI/4, x = cx+Math.cos(a)*150, y = cy+Math.sin(a)*100;
-    svg.append(sv('line',{x1:cx,y1:cy,x2:x,y2:y,stroke:'#0b0b0b','stroke-width':2,'stroke-dasharray':'4 4'}));
-  });
-  svg.append(sv('rect',{x:cx-82,y:cy-24,width:164,height:48,fill:'#0b0b0b'}));
-  const t1 = sv('text',{x:cx,y:cy-4,'text-anchor':'middle',fill:'#62C584',style:'font:700 12px ui-monospace,Menlo,monospace'}); t1.textContent=T('STRINGS.q4_center');
-  const t2 = sv('text',{x:cx,y:cy+13,'text-anchor':'middle',fill:'#62C584',style:'font:700 12px ui-monospace,Menlo,monospace'}); t2.textContent=T('STRINGS.q4_center2');
-  svg.append(t1,t2);
-  CONTEXT_ITEMS.forEach((it,i)=>{
-    const a = -Math.PI/2 + i*Math.PI/4, x = cx+Math.cos(a)*150, y = cy+Math.sin(a)*100;
-    const on = A.q4.includes(it.id);
-    const t = sv('text',{x, y:y+5,'text-anchor':'middle',class:'num'}); t.textContent = String(i+1);
-    const g = sv('g',{class:'node'+(on?' on':''), tabindex:'0', role:'button', 'aria-pressed':String(on), 'aria-label':(i+1)+'. '+T('CONTEXT_ITEMS.'+it.id), 'data-fid':'q4n_'+it.id},
-      sv('rect',{x:x-17,y:y-17,width:34,height:34}), t);
-    g.addEventListener('click', ()=>toggle(it.id));
-    g.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggle(it.id); } });
-    svg.append(g);
-  });
-  return h('section',{class:'ctx'}, head('q4'), tx('p','STRINGS.q4_hint',{class:'hint'}), svg,
-    CONTEXT_ITEMS.map((it,i)=> optBtn({fid:'q4_'+it.id, pressed:A.q4.includes(it.id), on:()=>toggle(it.id),
-      label: h('span',{}, (i+1)+'. ', tx('span','CONTEXT_ITEMS.'+it.id))})),
-    optBtn({fid:'q4_unknown', pressed:!!A.q4_unknown, key:'STRINGS.q4_unknown', on:()=>{ A.q4_unknown=!A.q4_unknown; if(A.q4_unknown) A.q4=[]; changed(); }}));
+  const A=S.A;
+  return h('section',{}, head('q4'), tx('p','STRINGS.q4_scene',{class:'note'}),
+    A.q4_unknown ? null : textField({fid:'q4t', labelKey:'STRINGS.q4_label', value:A.q4, max:500, oninput:v=>{ A.q4=v; renderNav(); }}),
+    optBtn({fid:'q4_unknown', pressed:!!A.q4_unknown, key:'STRINGS.q4_unknown', on:()=>{ A.q4_unknown=!A.q4_unknown; changed(); }}));
 };
 
 R.q5 = ()=>{

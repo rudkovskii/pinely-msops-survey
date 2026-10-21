@@ -59,7 +59,7 @@ function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k)||''; loc
 // конфиг (тексты и эталоны) берём прямо из index.html, чтобы подписи всегда совпадали
 fetch('index.html').then(r=>r.text()).then(src=>{
   const m = src.match(/\/\*CONFIG-START\*\/([\s\S]*?)\/\*CONFIG-END\*\//);
-  C = new Function(m[1] + ';return {CONFIG,STRINGS,OPTIONS,FEATURE_LEVELS,FEATURES,CONTEXT_ITEMS,CONTEXT_REFERENCE,TRAFFIC_COLORS,TRAFFIC_CARDS,TRAFFIC_REFERENCE,AUTOMATION_TOPICS,EXAMPLES,SESSION_BLOCKS};')();
+  C = new Function(m[1] + ';return {CONFIG,STRINGS,OPTIONS,FEATURE_LEVELS,FEATURES,TRAFFIC_COLORS,TRAFFIC_CARDS,TRAFFIC_REFERENCE,AUTOMATION_TOPICS,EXAMPLES,SESSION_BLOCKS};')();
   if(!$('ep').value) $('ep').value = ls('msops_ep') || C.CONFIG.ENDPOINT || '';
 }).catch(e=>{ $('err').textContent = 'Не удалось прочитать index.html: '+e; });
 $('key').value = ls('msops_key');
@@ -111,12 +111,8 @@ function draw(){
     C.FEATURES.map(f=>`<tr><td>${esc(f.label)}${f.fake?' <span class="tag">ловушка</span>':''}</td>` + C.FEATURE_LEVELS.map(l=>`<td>${P.filter(p=>(p.q3||{})[f.id]===l.id).length||''}</td>`).join('') + '</tr>').join('') +
     `</table><p>Флаг overclaim: ${P.filter(p=>p.overclaim).map(p=>esc(p.name||'—')).join(', ') || 'нет'}</p>`);
 
-  const cref = C.CONTEXT_REFERENCE||[];
-  o.push('<h2>Q4 · Что видит Claude</h2>' + (cref.length?'':'<p class="muted">Эталон CONTEXT_REFERENCE не задан.</p>') +
-    '<table><tr><th>Элемент</th>' + (cref.length?'<th>Эталон</th>':'') + '<th>Отметили</th></tr>' +
-    C.CONTEXT_ITEMS.map(c=>`<tr><td>${esc(c.label)}</td>` + (cref.length?`<td>${cref.includes(c.id)?'видит':'не видит'}</td>`:'') + `<td>${P.filter(p=>(p.q4||[]).includes(c.id)).length}</td></tr>`).join('') +
-    `<tr><td class="muted">Не знаю</td>${cref.length?'<td></td>':''}<td>${P.filter(p=>(p.q4||[]).includes('unknown')).length}</td></tr></table>`);
-  if(cref.length) o.push('<p>Точных совпадений с эталоном: ' + P.filter(p=>{ const a=(p.q4||[]).filter(x=>x!=='unknown').sort().join(); return a && a===[...cref].sort().join(); }).length + ' из ' + N + '</p>');
+  o.push('<h2>Q4 · Куда Claude пойдёт искать ответ</h2>' + `<p>Не знаю: ${P.filter(p=>p.q4_unknown).length}</p>` +
+    (P.filter(p=>p.q4).map(p=>`<div class="quote"><b>${esc(p.name||'—')}</b><br>${esc(p.q4)}</div>`).join('') || '<p class="muted">нет ответов</p>'));
 
   const ref = C.TRAFFIC_REFERENCE||{}, hasRef = Object.keys(ref).length>0, cls={green:'g',yellow:'y',red:'r',unknown:'u'};
   o.push('<h2>Q5 · Светофор</h2>' + (hasRef?'<p class="muted">Красная рамка — расхождение с эталоном.</p>':'<p class="muted">Эталон TRAFFIC_REFERENCE не задан.</p>') +
@@ -143,7 +139,7 @@ function draw(){
 $('csv').onclick = ()=>{
   if(!C) return;
   const P = rows();
-  const cols = ['name','status','last_screen','q1','q2','q2_other', ...C.FEATURES.map(f=>'q3:'+f.id), 'overclaim','q4',
+  const cols = ['name','status','last_screen','q1','q2','q2_other', ...C.FEATURES.map(f=>'q3:'+f.id), 'overclaim','q4','q4_unknown',
     ...C.TRAFFIC_CARDS.map(t=>'q5:'+t.id), 'q6','q6_want','q7','q7_other','q8','q8_awkward','ts','sid'];
   const val = (p,c)=>{
     if(c.startsWith('q3:')) return (p.q3||{})[c.slice(3)]||'';
