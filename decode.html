@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Декодер анкеты MS-Ops</title>
+<style>
+  :root{--ink:#0b0b0b;--green:#34A948;--green2:#62C584;--soft:#eaf7ee;--muted:#5c665f;--yellow:#f2c230;--red:#e5484d;--grey:#b9c0bb;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Courier New",monospace}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.45}
+  .wrap{max-width:1200px;margin:0 auto;padding:16px}
+  h1{font-size:22px;margin:0 0 12px} h2{font-size:17px;margin:26px 0 10px;background:var(--ink);color:#fff;display:inline-block;padding:2px 8px}
+  .panel{border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);padding:12px;margin:0 0 16px;background:var(--soft)}
+  input,textarea,button{font:inherit}
+  input[type=text],input[type=password],textarea{border:2px solid var(--ink);padding:7px 9px;width:100%;background:#fff}
+  textarea{min-height:80px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:6px 0}
+  .row>input{flex:1;min-width:220px}
+  button{border:2px solid var(--ink);background:var(--green);padding:7px 14px;font-weight:700;cursor:pointer;box-shadow:2px 2px 0 var(--ink)}
+  button.ghost{background:#fff}
+  table{border-collapse:collapse;width:100%;margin:0 0 10px;background:#fff}
+  th,td{border:1px solid #cfd5d1;padding:5px 7px;text-align:left;vertical-align:top}
+  th{background:#f1f4f2;position:sticky;top:0}
+  .scroll{overflow:auto;max-height:70vh;border:2px solid var(--ink)}
+  .bar{display:inline-block;height:10px;background:var(--green);vertical-align:middle;margin-right:6px}
+  .g{background:#cdeed5}.y{background:#fbecb6}.r{background:#f8c9cb}.u{background:#e6e9e7}
+  .bad{outline:2px solid var(--red);outline-offset:-2px}
+  .muted{color:var(--muted)}
+  .tag{display:inline-block;border:1px solid var(--ink);padding:0 5px;margin:1px;font-size:12px;background:#fff}
+  .quote{border-left:4px solid var(--green);padding:4px 10px;margin:6px 0;background:#fafafa}
+  #err{color:var(--red);font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Декодер анкеты MS-Ops</h1>
+  <div class="panel">
+    <div class="row"><b>Из таблицы:</b></div>
+    <div class="row"><input type="text" id="ep" placeholder="URL приёмника (…/exec). По умолчанию берётся из index.html"></div>
+    <div class="row"><input type="password" id="key" placeholder="Ключ чтения READ_KEY"><button id="load">Загрузить</button></div>
+    <div class="row"><b>Или вручную:</b> <span class="muted">вставьте содержимое колонки raw_json, по одной строке JSON на строку</span></div>
+    <textarea id="raw"></textarea>
+    <div class="row"><button class="ghost" id="parse">Разобрать вставленное</button>
+      <label><input type="checkbox" id="hideDev" checked> скрыть тестовые (dev)</label>
+      <label><input type="checkbox" id="onlyDone"> только завершённые</label>
+      <button class="ghost" id="csv">Скачать CSV</button></div>
+    <div id="err"></div>
+  </div>
+  <div id="out"></div>
+</div>
+<script>
+let C = null, ANS = [], DEVN = [];
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k)||''; localStorage.setItem(k,v); }catch(e){ return ''; } }
+
+// конфиг (тексты и эталоны) берём прямо из index.html, чтобы подписи всегда совпадали
+fetch('index.html').then(r=>r.text()).then(src=>{
+  const m = src.match(/\/\*CONFIG-START\*\/([\s\S]*?)\/\*CONFIG-END\*\//);
+  C = new Function(m[1] + ';return {CONFIG,STRINGS,OPTIONS,TASK_CARDS,BINS,ISSUES,TRAFFIC_COLORS,TRAFFIC_CARDS,TRAFFIC_REFERENCE,CONTEXT_ITEMS,CONTEXT_REFERENCE,PROMPT_OPTIONS,VERIFY_TEXT,FEATURE_LEVELS,FEATURES,DEEP_TOPICS};')();
+  if(!$('ep').value) $('ep').value = ls('msops_ep') || C.CONFIG.ENDPOINT || '';
+}).catch(e=>{ $('err').textContent = 'Не удалось прочитать index.html: '+e; });
+$('key').value = ls('msops_key');
+
+const L = (list, id) => { const f = (list||[]).find(x=>x.id===id); return f ? f.label : id; };
+const labelTask = (p, id) => id==='other' ? 'Другое' : (C.TASK_CARDS.find(t=>t.id===id)||{}).label || ((p.q2_custom||[]).find(c=>c.id===id)||{}).label || id;
+
+$('load').onclick = async ()=>{
+  $('err').textContent=''; const ep=$('ep').value.trim(), key=$('key').value.trim();
+  ls('msops_ep', ep); ls('msops_key', key);
+  try{
+    const r = await fetch(ep + '?key=' + encodeURIComponent(key)); const d = await r.json();
+    if(!d.ok) throw new Error(d.error==='key' ? 'неверный ключ' : d.error);
+    ANS = d.answers; DEVN = d.dev; draw();
+  }catch(e){ $('err').textContent = 'Ошибка загрузки: ' + e.message; }
+};
+$('parse').onclick = ()=>{
+  ANS = $('raw').value.split('\n').map(s=>s.trim().replace(/^'/,'')).filter(Boolean).map(s=>{ try{ return JSON.parse(s); }catch(e){ return null; } }).filter(x=>x && !x.type);
+  DEVN = []; draw();
+};
+['hideDev','onlyDone'].forEach(id=> $(id).onchange = draw);
+
+function rows(){ return ANS.filter(p=> (!$('hideDev').checked || !p.dev) && (!$('onlyDone').checked || p.status==='done')); }
+function count(arr){ const m={}; arr.forEach(v=>{ if(v!=='' && v!=null) m[v]=(m[v]||0)+1; }); return Object.entries(m).sort((a,b)=>b[1]-a[1]); }
+function bars(list, labeler, total){
+  if(!list.length) return '<p class="muted">нет ответов</p>';
+  return '<table>' + list.map(([k,n])=>`<tr><td style="width:55%">${esc(labeler(k))}</td><td><span class="bar" style="width:${Math.round(n/Math.max(total,1)*200)}px"></span>${n}</td></tr>`).join('') + '</table>';
+}
+
+function draw(){
+  if(!C){ setTimeout(draw, 200); return; }
+  const P = rows(), N = P.length, o = [];
+  o.push(`<h2>Люди: ${N}</h2>`);
+  o.push('<div class="scroll"><table><tr><th>Имя</th><th>Статус</th><th>Дошёл до</th><th>Q1</th><th>Q6</th><th>Q8 уровень</th><th>Q9 подвохов</th><th>Q10</th><th>overclaim</th><th>Q12</th><th>Q13 топ</th></tr>' +
+    P.map(p=>`<tr><td>${esc(p.name||'—')}${p.dev?' <span class="tag">dev</span>':''}</td><td>${esc(p.status)}</td><td>${esc(p.last_screen)}</td>
+      <td>${esc(L(C.OPTIONS.q1,p.q1))}</td><td>${esc(L(C.OPTIONS.q6,p.q6))}</td>
+      <td>${p.q8 ? (p.q8.level==null?'не знаю':p.q8.level) : ''}</td>
+      <td>${p.q9 ? p.q9.traps_found+'/3'+(p.q9.trusted_as_is?' · поверил(а)':'') : ''}</td>
+      <td>${esc(L(C.OPTIONS.q10,p.q10))}</td><td>${p.overclaim?'<b style="color:#e5484d">да</b>':''}</td>
+      <td>${p.q12 ? esc(p.q12.answer==='yes' ? (p.q12.note ? 'да: '+p.q12.note : 'да (не подтверждено)') : 'нет') : ''}</td>
+      <td>${esc(((p.q13||{}).topics||[]).map(t=>L(C.DEEP_TOPICS,t)).join(' > '))}</td></tr>`).join('') + '</table></div>');
+
+  o.push('<h2>Q1 · Частота</h2>' + bars(count(P.map(p=>p.q1)), k=>L(C.OPTIONS.q1,k), N));
+
+  // Q2
+  const allIds = [...C.TASK_CARDS.map(t=>t.id)];
+  o.push('<h2>Q2 · Карта задач</h2><table><tr><th>Задача</th>' + C.BINS.map(b=>`<th>${esc(b.label)}</th>`).join('') + '<th>не разложено</th></tr>' +
+    allIds.map(id=>`<tr><td>${esc(L(C.TASK_CARDS,id))}</td>` + C.BINS.map(b=>`<td>${P.filter(p=>(p.q2||{})[id]===b.id).length||''}</td>`).join('') + `<td class="muted">${P.filter(p=>!(p.q2||{})[id]).length||''}</td></tr>`).join('') + '</table>');
+  const customs = P.flatMap(p=>(p.q2_custom||[]).map(c=>`${c.label} → ${L(C.BINS,(p.q2||{})[c.id])||'не разложено'} (${p.name||'—'})`));
+  if(customs.length) o.push('<p><b>Свои задачи:</b></p>' + customs.map(s=>`<div class="quote">${esc(s)}</div>`).join(''));
+
+  // Q3
+  const q3 = P.flatMap(p=>(p.q3||[]).map(x=>({...x, who:p.name, p})));
+  o.push('<h2>Q3 · Точки провала</h2>' + bars(count(q3.flatMap(x=>x.issues)), k=>L(C.ISSUES,k), q3.length) +
+    q3.map(x=>`<div class="quote"><b>${esc(labelTask(x.p,x.task))}</b> · ${esc(x.who||'—')}: ${x.issues.map(i=>`<span class="tag">${esc(L(C.ISSUES,i))}</span>`).join('')}${x.note?'<br>'+esc(x.note):''}</div>`).join(''));
+
+  o.push('<h2>Q4 · Барьеры</h2>' + bars(count(P.flatMap(p=>p.q4||[])), k=>L(C.OPTIONS.q4,k), N) +
+    P.filter(p=>p.q4_other).map(p=>`<div class="quote">${esc(p.q4_other)} · ${esc(p.name||'—')}</div>`).join(''));
+
+  // Q5
+  const ref = C.TRAFFIC_REFERENCE||{}, hasRef = Object.keys(ref).length>0, cls={green:'g',yellow:'y',red:'r',unknown:'u'};
+  o.push('<h2>Q5 · Светофор</h2>' + (hasRef?'<p class="muted">Красная рамка — расхождение с эталоном.</p>':'<p class="muted">Эталон TRAFFIC_REFERENCE не задан.</p>') +
+    '<div class="scroll"><table><tr><th>Карточка</th>' + (hasRef?'<th>Эталон</th>':'') + P.map(p=>`<th>${esc(p.name||'—')}</th>`).join('') + '</tr>' +
+    C.TRAFFIC_CARDS.map(c=>`<tr><td>${esc(c.label)}</td>` + (hasRef?`<td class="${cls[ref[c.id]]||''}">${esc(L(C.TRAFFIC_COLORS,ref[c.id])||'')}</td>`:'') +
+      P.map(p=>{ const v=(p.q5||{})[c.id]; const bad = hasRef && v && ref[c.id] && v!==ref[c.id]; return `<td class="${cls[v]||''} ${bad?'bad':''}">${esc(v?L(C.TRAFFIC_COLORS,v):'')}</td>`; }).join('') + '</tr>').join('') + '</table></div>');
+
+  o.push('<h2>Q6 · Опора на правила</h2>' + bars(count(P.map(p=>p.q6)), k=>L(C.OPTIONS.q6,k), N));
+
+  // Q7
+  const cref = C.CONTEXT_REFERENCE||[];
+  o.push('<h2>Q7 · Что видит Claude</h2>' + (cref.length?'':'<p class="muted">Эталон CONTEXT_REFERENCE не задан.</p>') +
+    '<table><tr><th>Элемент</th>' + (cref.length?'<th>Эталон</th>':'') + '<th>Отметили</th></tr>' +
+    C.CONTEXT_ITEMS.map(c=>`<tr><td>${esc(c.label)}</td>` + (cref.length?`<td>${cref.includes(c.id)?'видит':'не видит'}</td>`:'') + `<td>${P.filter(p=>(p.q7||[]).includes(c.id)).length}</td></tr>`).join('') +
+    `<tr><td class="muted">Не знаю</td>${cref.length?'<td></td>':''}<td>${P.filter(p=>(p.q7||[]).includes('unknown')).length}</td></tr></table>`);
+  if(cref.length) o.push('<p>Точных совпадений с эталоном: ' + P.filter(p=>{ const a=(p.q7||[]).filter(x=>x!=='unknown').sort().join(); return a && a===[...cref].sort().join(); }).length + ' из ' + N + '</p>');
+
+  o.push('<h2>Q8 · Постановка задачи</h2>' + bars(count(P.filter(p=>p.q8).map(p=>p.q8.level==null?'не знаю':'уровень '+p.q8.level)), k=>k, N));
+
+  const traps = C.VERIFY_TEXT.filter(s=>s.trap).map(s=>s.id);
+  o.push('<h2>Q9 · Проверка ответа</h2>' + bars(count(P.filter(p=>p.q9).map(p=>p.q9.traps_found+' из 3')), k=>k, N) +
+    `<p>«Поверил(а) как есть»: ${P.filter(p=>p.q9&&p.q9.trusted_as_is).length}</p>` +
+    '<table><tr><th>Фраза</th><th>Подвох</th><th>Отметили</th></tr>' + C.VERIFY_TEXT.map(s=>`<tr><td>${esc(s.label)}</td><td>${s.trap?'да':''}</td><td>${P.filter(p=>p.q9&&p.q9.marked.includes(s.id)).length}</td></tr>`).join('') + '</table>');
+
+  o.push('<h2>Q10 · Водянистый ответ</h2>' + bars(count(P.map(p=>p.q10)), k=>L(C.OPTIONS.q10,k), N));
+
+  o.push('<h2>Q11 · Функции</h2><table><tr><th>Функция</th>' + C.FEATURE_LEVELS.map(l=>`<th>${esc(l.label)}</th>`).join('') + '</tr>' +
+    C.FEATURES.map(f=>`<tr><td>${esc(f.label)}${f.fake?' <span class="tag">ловушка</span>':''}</td>` + C.FEATURE_LEVELS.map(l=>`<td>${P.filter(p=>(p.q11||{})[f.id]===l.id).length||''}</td>`).join('') + '</tr>').join('') +
+    `</table><p>Флаг overclaim: ${P.filter(p=>p.overclaim).map(p=>esc(p.name||'—')).join(', ') || 'нет'}</p>`);
+
+  // Q13: 1 место = 3 балла, 2 = 2, 3 = 1
+  const score = {}; P.forEach(p=>((p.q13||{}).topics||[]).forEach((t,i)=>{ score[t]=(score[t]||0)+(3-i); }));
+  o.push('<h2>Q13 · Темы сессии (1 место = 3 балла)</h2>' + bars(Object.entries(score).sort((a,b)=>b[1]-a[1]), k=>L(C.DEEP_TOPICS,k), 3*N));
+
+  const free = [
+    ...P.filter(p=>(p.q13||{}).awkward_question).map(p=>['Неловкий вопрос', p.name, p.q13.awkward_question]),
+    ...P.filter(p=>p.q14).map(p=>['Задача на завтра', p.name, p.q14]),
+    ...P.filter(p=>p.q12&&p.q12.note).map(p=>['Уже автоматизировал(а)', p.name, p.q12.note]),
+  ];
+  o.push('<h2>Свободные ответы</h2>' + (free.length ? free.map(([k,n,t])=>`<div class="quote"><b>${esc(k)}</b> · ${esc(n||'—')}<br>${esc(t)}</div>`).join('') : '<p class="muted">нет</p>'));
+
+  if(DEVN.length){
+    o.push('<h2>Правки из режима разработчика</h2><div class="scroll"><table><tr><th>Время</th><th>Тип</th><th>Экран</th><th>Ключ</th><th>Было</th><th>Стало</th><th>Пометка</th></tr>' +
+      DEVN.map(d=>`<tr><td>${esc((d.ts||'').slice(0,16))}</td><td>${esc(d.kind)}</td><td>${esc(d.screen)}</td><td>${esc(d.key)}</td><td>${esc(d.orig)}</td><td>${esc(d.text)}</td><td>${esc(d.note)}</td></tr>`).join('') + '</table></div>');
+  }
+  $('out').innerHTML = o.join('');
+}
+
+$('csv').onclick = ()=>{
+  if(!C) return;
+  const P = rows();
+  const cols = ['name','status','last_screen','q1', ...C.TASK_CARDS.map(t=>'q2:'+t.id), 'q2_custom','q3','q4','q4_other',
+    ...C.TRAFFIC_CARDS.map(t=>'q5:'+t.id), 'q6','q7','q8_level','q9_traps_found','q9_marked','q9_trusted','q10',
+    ...C.FEATURES.map(f=>'q11:'+f.id), 'overclaim','q12','q12_note','q13_topics','q13_awkward','q14','ts','sid'];
+  const val = (p,c)=>{
+    if(c.startsWith('q2:')) return (p.q2||{})[c.slice(3)]||'';
+    if(c.startsWith('q5:')) return (p.q5||{})[c.slice(3)]||'';
+    if(c.startsWith('q11:')) return (p.q11||{})[c.slice(4)]||'';
+    switch(c){
+      case 'q2_custom': return (p.q2_custom||[]).map(x=>x.label+' → '+((p.q2||{})[x.id]||'-')).join('; ');
+      case 'q3': return (p.q3||[]).map(x=>labelTask(p,x.task)+' ['+(x.issues||[]).join(', ')+']'+(x.note?' — '+x.note:'')).join(' | ');
+      case 'q4': return (p.q4||[]).join(', ');
+      case 'q7': return (p.q7||[]).join(', ');
+      case 'q8_level': return p.q8 ? (p.q8.level==null?'unknown':p.q8.level) : '';
+      case 'q9_traps_found': return p.q9 ? p.q9.traps_found : '';
+      case 'q9_marked': return p.q9 ? p.q9.marked.join(', ') : '';
+      case 'q9_trusted': return p.q9 && p.q9.trusted_as_is ? 'yes' : '';
+      case 'overclaim': return p.overclaim ? 'TRUE' : '';
+      case 'q12': return p.q12 ? p.q12.answer : '';
+      case 'q12_note': return p.q12 ? p.q12.note : '';
+      case 'q13_topics': return ((p.q13||{}).topics||[]).join(' > ');
+      case 'q13_awkward': return (p.q13||{}).awkward_question||'';
+      default: return p[c]==null ? '' : p[c];
+    }
+  };
+  const q = s => { s=String(s); if(/^[=+\-@]/.test(s)) s="'"+s; return '"'+s.replace(/"/g,'""')+'"'; };
+  const csv = '﻿' + [cols.join(','), ...P.map(p=>cols.map(c=>q(val(p,c))).join(','))].join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download = 'msops-answers.csv'; a.click();
+};
+</script>
+</body>
+</html>
