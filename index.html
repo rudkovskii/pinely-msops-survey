@@ -207,6 +207,7 @@ const STRINGS = {
 
   q6_title: 'Насколько вам понятно, что из вашей работы можно автоматизировать?',
   q6_want: 'Что про автоматизацию хочется понять? (можно несколько, необязательно)',
+  q6_idea: 'Есть ли у вас идея своей задачи для автоматизации? Опишите в паре фраз, общими словами и без внутренних данных (необязательно)',
 
   q7_title: 'Какие примеры из работы Пайнли разобрать на сессии?',
   q7_hint: 'Выберите до двух.',
@@ -412,7 +413,7 @@ function payload(status){
     overclaim: fake.some(id=>q3[id]==='use'),
     q4:A.q4_unknown ? '' : (A.q4||''), q4_unknown:!!A.q4_unknown,
     q5:A.q5||{},
-    q6:A.q6||'', q6_want:A.q6_want||[],
+    q6:A.q6||'', q6_want:A.q6_want||[], q6_idea:A.q6_idea||'',
     q7:A.q7||[], q7_other:(A.q7||[]).includes('other') ? (A.q7_other||'') : '',
     q8:A.q8||[], q8_awkward:A.q8_awkward||'',
   };
@@ -450,7 +451,7 @@ function changed(){ save(); renderBody(); }
 function answered(id){
   const A=S.A, v=A[id];
   if(id==='q4') return !!(A.q4_unknown || (A.q4||'').trim());
-  if(id==='q6') return !!(A.q6 || (A.q6_want||[]).length);
+  if(id==='q6') return !!(A.q6 || (A.q6_want||[]).length || (A.q6_idea||'').trim());
   if(id==='q8') return !!((A.q8||[]).length || A.q8_awkward);
   if(v==null || v==='') return false;
   if(Array.isArray(v)) return v.length>0;
@@ -589,7 +590,8 @@ R.q6 = ()=>{
     h('div',{class:'chips'}, AUTOMATION_TOPICS.map(t=> h('button',{class:'chip',type:'button',fid:'q6w_'+t.id,
       'aria-pressed':String(want.includes(t.id)),
       onclick:()=>{ A.q6_want = want.includes(t.id) ? want.filter(x=>x!==t.id) : [...want, t.id]; changed(); }},
-      tx('span','AUTOMATION_TOPICS.'+t.id)))));
+      tx('span','AUTOMATION_TOPICS.'+t.id)))),
+    textField({fid:'q6i', labelKey:'STRINGS.q6_idea', value:A.q6_idea, max:300, oninput:v=>{ A.q6_idea=v; renderNav(); }}));
 };
 
 R.q7 = ()=> h('section',{}, head('q7'), tx('p','STRINGS.q7_hint',{class:'hint'}),

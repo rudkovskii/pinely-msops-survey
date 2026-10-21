@@ -121,7 +121,8 @@ function draw(){
       P.map(p=>{ const v=(p.q5||{})[c.id]; const bad = hasRef && v && ref[c.id] && v!==ref[c.id]; return `<td class="${cls[v]||''} ${bad?'bad':''}">${esc(v?L(C.TRAFFIC_COLORS,v):'')}</td>`; }).join('') + '</tr>').join('') + '</table></div>');
 
   o.push('<h2>Q6 · Автоматизация</h2>' + bars(count(P.map(p=>p.q6)), k=>L(C.OPTIONS.q6,k), N) +
-    '<p><b>Что хочется понять:</b></p>' + bars(count(P.flatMap(p=>p.q6_want||[])), k=>L(C.AUTOMATION_TOPICS,k), N));
+    '<p><b>Что хочется понять:</b></p>' + bars(count(P.flatMap(p=>p.q6_want||[])), k=>L(C.AUTOMATION_TOPICS,k), N) +
+    '<p><b>Идеи своих проектов автоматизации:</b></p>' + (P.filter(p=>p.q6_idea).map(p=>`<div class="quote"><b>${esc(p.name||'—')}</b><br>${esc(p.q6_idea)}</div>`).join('') || '<p class="muted">нет</p>'));
 
   o.push('<h2>Q7 · Примеры из Пайнли</h2>' + bars(count(P.flatMap(p=>p.q7||[])), k=>L(C.EXAMPLES,k), N) +
     P.filter(p=>p.q7_other).map(p=>`<div class="quote">${esc(p.q7_other)} · ${esc(p.name||'—')}</div>`).join(''));
@@ -140,7 +141,7 @@ $('csv').onclick = ()=>{
   if(!C) return;
   const P = rows();
   const cols = ['name','status','last_screen','q1','q2','q2_other', ...C.FEATURES.map(f=>'q3:'+f.id), 'overclaim','q4','q4_unknown',
-    ...C.TRAFFIC_CARDS.map(t=>'q5:'+t.id), 'q6','q6_want','q7','q7_other','q8','q8_awkward','ts','sid'];
+    ...C.TRAFFIC_CARDS.map(t=>'q5:'+t.id), 'q6','q6_want','q6_idea','q7','q7_other','q8','q8_awkward','ts','sid'];
   // коды ответов → русские подписи из конфига анкеты
   const LISTS = {q1:C.OPTIONS.q1, q2:C.OPTIONS.q2, q6:C.OPTIONS.q6, q6_want:C.AUTOMATION_TOPICS, q7:C.EXAMPLES, q8:C.SESSION_BLOCKS};
   const val = (p,c)=>{
