@@ -635,21 +635,21 @@ function SP(rows,x,y,o){ o=o||{}; const s=o.s||1, pal=o.pal?Object.assign({},PAL
   rows.forEach((r,j)=>{ for(let i=0;i<r.length;i++){ const ch=r[i]; if(ch==='.') continue; X.fillStyle=pal[ch]; X.fillRect(px(i),y+j*s,s,s); } });
 }
 const NEO = [
-  "...hhhh...",
   "..hhhhhh..",
-  "..hhsshh..",
+  "..hhhhhh..",
+  "..ssssss..",
   "..oOooOo..",
-  "..oossoo..",
+  "..ssssss..",
   "...ssss...",
   "....ss....",
-  ".cccwwccc.",
-  "cccCwwCccc",
-  "cccCwwCccc",
+  ".cccppccc.",
+  "cccCppCccc",
+  "cccCppCccc",
   "cc.cccc.cc",
   "ss.cccc.ss",
-  "...cccc...",
   "..cccccc..",
-  "..cc..cc..",
+  ".cccccccc.",
+  ".ccc..ccc.",
 ];
 const LEGS = [
   ["...p..p...","...p..p...","..kk..kk.."],
@@ -692,7 +692,7 @@ const ROBOT = [
 const QMARK = [".www.","w...w","....w","...w.","..w..",".....","..w.."];
 const EXCL  = ["..w..","..w..","..w..","..w..","..w..",".....","..w.."];
 const CHECK = [".....w","....ww","w..ww.","wwww..",".ww..."];
-const GLOW = '#2f7a43';
+const GLOW = '#24553a';
 
 function neo(x,y,o){ o=o||{}; const s=o.s||1; const legs = o.walk==null ? LEGS[0] : LEGS[1+(Math.floor(o.walk)%2)];
   SP([...NEO, ...legs], x, y, {s, flip:o.flip, ol:o.ol===undefined?GLOW:o.ol});
